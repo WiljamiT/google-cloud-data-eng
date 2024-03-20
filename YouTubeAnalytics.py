@@ -1,4 +1,5 @@
 import requests
+from kafka import KafkaProducer
 import logging
 from constants import YT_API_KEY, PLAYLIST_ID
 from pprint import pprint
@@ -37,6 +38,7 @@ def format_response(video):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
+    producer = KafkaProducer(bootstrap_servers=['localhost:9092'])
     for video_item in fetch_page_lists(
             "https://www.googleapis.com/youtube/v3/playlistItems",
             { 'playlistId': PLAYLIST_ID, 'part': 'snippet,contentDetails,status', },
@@ -48,6 +50,6 @@ if __name__ == "__main__":
             { 'id': video_id, 'part': 'snippet, statistics' },
             None):
         
-            logging.info("Video here => %s", pprint(format_response(video)))
-
-        
+            # logging.info("Video here => %s", pprint(format_response(video)))
+            producer.send('youtube_videos', json.dumps(format_response(video)).encode('utf-8'))
+            producer.flush()
