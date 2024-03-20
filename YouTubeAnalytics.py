@@ -1,17 +1,19 @@
+import json
+import logging
+
 import requests
 from kafka import KafkaProducer
-import logging
+
 from constants import YT_API_KEY, PLAYLIST_ID
-from pprint import pprint
-import json
+
 
 def fetch_page(url, parameters, page_token=None):
     params = {**parameters, 'key': YT_API_KEY, 'page_token': page_token}
     response = requests.get(url, params)
     payload = json.loads(response.text)
-    logging.info("Response => %s", payload)
 
     return payload
+
 
 def fetch_page_lists(url, parameters, page_token=None):
     while True:
@@ -37,19 +39,21 @@ def format_response(video):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    
+
     producer = KafkaProducer(bootstrap_servers=['localhost:9092'])
+
     for video_item in fetch_page_lists(
             "https://www.googleapis.com/youtube/v3/playlistItems",
-            { 'playlistId': PLAYLIST_ID, 'part': 'snippet,contentDetails,status', },
+            {'playlistId': PLAYLIST_ID, 'part': 'snippet,contentDetails'},
             None):
         video_id = video_item['contentDetails']['videoId']
 
         for video in fetch_page_lists(
-            "https://www.googleapis.com/youtube/v3/videos",
-            { 'id': video_id, 'part': 'snippet, statistics' },
-            None):
-        
+                "https://www.googleapis.com/youtube/v3/videos",
+                {'id': video_id, 'part': 'snippet,statistics'},
+                None):
             # logging.info("Video here => %s", pprint(format_response(video)))
-            producer.send('youtube_videos', json.dumps(format_response(video)).encode('utf-8'))
-            producer.flush()
+            producer.send('youtube_videos', json.dumps(format_response(video)).encode('utf-8'),
+                          key=video_id.encode('utf-8'))
+            print('Sent ', video['snippet']['title'])
+            # producer.flush()
